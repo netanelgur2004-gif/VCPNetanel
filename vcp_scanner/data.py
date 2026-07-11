@@ -91,12 +91,13 @@ def _fetch_via_yahoo_chart_api(ticker: str, period: str) -> Optional[pd.DataFram
 def fetch_history(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
     """Fetch daily OHLCV history for a single ticker.
 
-    Tries yfinance first, then falls back to a direct Yahoo chart API call.
+    Tries the direct Yahoo chart API first (fast, no session/crumb dance),
+    then falls back to yfinance if that fails for some reason.
     Returns None if the data is missing, too short, or malformed.
     """
-    df = _fetch_via_yfinance(ticker, period)
+    df = _fetch_via_yahoo_chart_api(ticker, period)
     if df is None or df.empty:
-        df = _fetch_via_yahoo_chart_api(ticker, period)
+        df = _fetch_via_yfinance(ticker, period)
 
     if df is None or df.empty:
         return None

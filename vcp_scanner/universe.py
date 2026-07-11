@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import List
 
 import pandas as pd
+import requests
 
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; vcp-scanner/0.1)"}
 
 # Small offline fallback in case the Wikipedia fetch fails (e.g. no network).
 FALLBACK_SP500_SAMPLE = [
@@ -27,7 +30,9 @@ def tickers_from_csv_arg(arg: str) -> List[str]:
 
 def sp500_tickers() -> List[str]:
     try:
-        tables = pd.read_html(SP500_WIKI_URL)
+        resp = requests.get(SP500_WIKI_URL, headers=_HEADERS, timeout=15)
+        resp.raise_for_status()
+        tables = pd.read_html(io.StringIO(resp.text))
         df = tables[0]
         tickers = df["Symbol"].astype(str).str.replace(".", "-", regex=False).tolist()
         if tickers:
