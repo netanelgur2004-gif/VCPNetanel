@@ -68,6 +68,12 @@ def format_table(scores: List[VCPScore]) -> str:
     rows = []
     for s in scores:
         vol_flag = "yes" if (s.vcp.volume_dryup_score or 0) >= 60 else "no"
+        if s.vcp.pivot_extension_pct is None:
+            ext_str = "-"
+        elif s.vcp.pivot_extension_pct <= 0:
+            ext_str = f"-{abs(s.vcp.pivot_extension_pct):.1f}% (below pivot)"
+        else:
+            ext_str = f"+{s.vcp.pivot_extension_pct:.1f}% (extended)"
         rows.append(
             [
                 s.ticker,
@@ -80,11 +86,12 @@ def format_table(scores: List[VCPScore]) -> str:
                 f"{s.rs_rating:.0f}" if s.rs_rating is not None else "-",
                 f"{s.last_close:.2f}",
                 f"{s.vcp.pivot_price:.2f}" if s.vcp.pivot_price else "-",
+                ext_str,
             ]
         )
     headers = [
         "Ticker", "VCP Score", "Trend", "Contractions", "Vol Dry-Up",
-        "Tightness", "Prior Uptrend", "RS", "Last", "Pivot",
+        "Tightness", "Prior Uptrend", "RS", "Last", "Pivot", "Vs. Pivot",
     ]
     return tabulate(rows, headers=headers, tablefmt="simple")
 
@@ -98,7 +105,8 @@ def write_csv(scores: List[VCPScore], path: str) -> None:
             [
                 "ticker", "vcp_score", "trend_passed", "trend_total", "num_contractions",
                 "contractions_pct", "volume_dryup_score", "tightness_score",
-                "prior_uptrend_pct", "rs_rating", "last_close", "pivot_price", "last_date",
+                "prior_uptrend_pct", "rs_rating", "last_close", "pivot_price",
+                "pivot_extension_pct", "pivot_proximity_score", "last_date",
             ]
         )
         for s in scores:
@@ -116,6 +124,8 @@ def write_csv(scores: List[VCPScore], path: str) -> None:
                     s.rs_rating if s.rs_rating is not None else "",
                     s.last_close,
                     s.vcp.pivot_price if s.vcp.pivot_price is not None else "",
+                    round(s.vcp.pivot_extension_pct, 1) if s.vcp.pivot_extension_pct is not None else "",
+                    round(s.vcp.pivot_proximity_score, 1),
                     s.last_date.date().isoformat(),
                 ]
             )

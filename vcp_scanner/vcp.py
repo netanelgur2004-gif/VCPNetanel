@@ -59,6 +59,9 @@ class VCPAnalysis:
     base_length_days: int = 0
     base_start_date: Optional[pd.Timestamp] = None
 
+    pivot_extension_pct: Optional[float] = None
+    pivot_proximity_score: float = 0.0
+
 
 def _resample_weekly(df: pd.DataFrame) -> pd.DataFrame:
     """Resample daily OHLCV to weekly bars.
@@ -164,6 +167,27 @@ def analyze_prior_uptrend(
     return pct, score
 
 
+def analyze_pivot_proximity(last_close: float, pivot_price: Optional[float]) -> tuple[Optional[float], float]:
+    """Score how close price is to the pivot (base high / breakout trigger).
+
+    Minervini's ideal entry is right at the pivot, not a stock that has
+    already run well past it. `extension_pct` is signed: negative means
+    price is still below the pivot (not broken out yet), positive means
+    price has already cleared it. Score peaks near 0% either side and
+    decays as the stock sits deeper in the base or gets further extended
+    above the breakout.
+    """
+    if not pivot_price or pivot_price <= 0 or last_close <= 0:
+        return None, 0.0
+
+    extension = (last_close - pivot_price) / pivot_price * 100.0
+    if extension <= 0:
+        score = _ratio_to_score(-extension, best=3.0, worst=25.0)
+    else:
+        score = _ratio_to_score(extension, best=3.0, worst=20.0)
+    return extension, score
+
+
 def analyze_vcp(df: pd.DataFrame, pct_threshold: float = 8.0, base_lookback: int = 260) -> VCPAnalysis:
     """Run the full structural VCP analysis on a ticker's price history.
 
@@ -190,7 +214,13 @@ def analyze_vcp(df: pd.DataFrame, pct_threshold: float = 8.0, base_lookback: int
     result.base_length_days = len(base_slice)
     result.base_start_date = base_start.date
 
-    highs_in_seq = [p.price for p in seq if p.kind == "high"]
+    # The ZigZag's last point is always a provisional "current extreme" that
+    # hasn't been confirmed by a reversal (see find_swing_points) -- for a
+    # stock still actively running post-breakout that point is essentially
+    # today's price, which would make the pivot chase price and mask
+    # extension. Only confirmed highs count as the base's actual pivot.
+    confirmed_seq = seq[:-1] if len(seq) > 1 else seq
+    highs_in_seq = [p.price for p in confirmed_seq if p.kind == "high"]
     result.pivot_price = max(highs_in_seq) if highs_in_seq else float(base_slice["High"].max())
 
     result.volume_dryup_ratio, result.recent_volume_ratio, result.volume_dryup_score = (
@@ -203,6 +233,10 @@ def analyze_vcp(df: pd.DataFrame, pct_threshold: float = 8.0, base_lookback: int
 
     result.prior_uptrend_pct, result.prior_uptrend_score = analyze_prior_uptrend(
         df, base_start, base_start.price, pct_threshold
+    )
+
+    result.pivot_extension_pct, result.pivot_proximity_score = analyze_pivot_proximity(
+        float(df["Close"].iloc[-1]), result.pivot_price
     )
 
     return result

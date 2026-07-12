@@ -11,11 +11,12 @@ The score is a weighted blend of the pieces Minervini describes in
 
 | Component | Weight | What it measures |
 |---|---|---|
-| Trend Template | 35% | Minervini's 8-point "Stage 2 uptrend" checklist (price vs. 50/150/200-day MAs, MA stacking order, 200-day MA trending up, price vs. 52-week high/low, relative strength) |
-| Contraction structure | 25% | Whether the stock is pulling back in a series of *shrinking* swings (e.g. -25% → -15% → -8% → -4%) |
-| Volume dry-up | 20% | Whether volume is contracting alongside price (quiet, low-volume drift into the pivot) |
+| Trend Template | 30% | Minervini's 8-point "Stage 2 uptrend" checklist (price vs. 50/150/200-day MAs, MA stacking order, 200-day MA trending up, price vs. 52-week high/low, relative strength) |
+| Contraction structure | 20% | Whether the stock is pulling back in a series of *shrinking* swings (e.g. -25% → -15% → -8% → -4%) |
+| Volume dry-up | 15% | Whether volume is contracting alongside price (quiet, low-volume drift into the pivot) |
 | Tightness near pivot | 10% | How tight the daily trading range has become in the most recent sessions |
 | Prior uptrend | 10% | Whether there was a real advance *before* the base (a VCP needs something to contract from) |
+| Pivot proximity | 15% | How close price is to the pivot (base high / breakout trigger) — peaks for setups sitting right at the pivot; stocks already extended well past it get marked down as no longer an ideal entry |
 
 Relative Strength is computed as a percentile rank of trailing momentum
 (IBD-style, weighted toward the most recent quarter) **across the scanned
@@ -63,9 +64,10 @@ python -m vcp_scanner.scanner --sp500 --min-score 60 --output results.csv
 
 Each row includes: ticker, overall VCP score, Trend Template pass count
 (out of 8), number of detected contractions, whether volume is drying up,
-tightness %, prior uptrend %, RS rating, last close, and an estimated pivot
+tightness %, prior uptrend %, RS rating, last close, an estimated pivot
 (the high of the base — a breakout above this on strong volume is the
-classic VCP buy trigger).
+classic VCP buy trigger), and how far price currently sits above or below
+that pivot.
 
 ## Project layout
 

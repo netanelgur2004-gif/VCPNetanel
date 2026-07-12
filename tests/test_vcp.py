@@ -88,6 +88,26 @@ def test_score_ticker_produces_bounded_score_and_detects_contractions():
     assert result.score >= 40
 
 
+def test_extended_stock_scores_lower_pivot_proximity_than_near_pivot():
+    prices, vols = _synthetic_vcp_series()
+    df = _make_df(prices, vols)
+    near = score_ticker("NEAR", df, rs_rating=85)
+
+    # Same base, but tack on a strong rally well past the pivot -- an
+    # already-extended breakout, not an about-to-break-out setup.
+    rng = np.random.default_rng(99)
+    runup_n = 15
+    runup = list(np.linspace(prices[-1], prices[-1] * 1.3, runup_n) + rng.normal(0, 0.3, runup_n))
+    ext_prices = list(prices) + runup
+    ext_vols = list(vols) + list(np.linspace(vols[-1], vols[-1] * 1.5, runup_n))
+    ext_df = _make_df(ext_prices, ext_vols)
+    extended = score_ticker("EXT", ext_df, rs_rating=85)
+
+    assert extended.vcp.pivot_extension_pct is not None
+    assert extended.vcp.pivot_extension_pct > 10  # meaningfully through the pivot
+    assert extended.vcp.pivot_proximity_score < near.vcp.pivot_proximity_score
+
+
 def test_flat_random_walk_scores_lower_than_clean_vcp():
     rng = np.random.default_rng(7)
     flat_prices = list(100 + np.cumsum(rng.normal(0, 1.0, 260)))

@@ -11,11 +11,12 @@ from .trend_template import TrendTemplateResult, evaluate_trend_template
 from .vcp import VCPAnalysis, analyze_vcp
 
 WEIGHTS = {
-    "trend_template": 0.35,
-    "contraction": 0.25,
-    "volume_dryup": 0.20,
+    "trend_template": 0.30,
+    "contraction": 0.20,
+    "volume_dryup": 0.15,
     "tightness": 0.10,
     "prior_uptrend": 0.10,
+    "pivot_proximity": 0.15,
 }
 
 
@@ -36,6 +37,7 @@ class VCPScore:
             "volume_dryup": self.vcp.volume_dryup_score,
             "tightness": self.vcp.tightness_score,
             "prior_uptrend": self.vcp.prior_uptrend_score,
+            "pivot_proximity": self.vcp.pivot_proximity_score,
         }
 
 
@@ -49,6 +51,7 @@ def score_ticker(ticker: str, df: pd.DataFrame, rs_rating: Optional[float] = Non
         "volume_dryup": vcp.volume_dryup_score,
         "tightness": vcp.tightness_score,
         "prior_uptrend": vcp.prior_uptrend_score,
+        "pivot_proximity": vcp.pivot_proximity_score,
     }
     total = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)
 
