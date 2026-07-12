@@ -9,6 +9,7 @@ from typing import List
 from tabulate import tabulate
 
 from .data import fetch_many
+from .report import write_html_report
 from .rs_rating import compute_rs_ratings
 from .scorer import VCPScore, score_ticker
 from .universe import sp500_tickers, tickers_from_csv_arg, tickers_from_file
@@ -30,6 +31,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--min-score", type=float, default=0.0, help="Only show results scoring >= this (0-100)"
     )
     parser.add_argument("--output", help="Write full ranked results to this CSV path")
+    parser.add_argument("--html-report", help="Write full ranked results to this self-contained HTML report path")
     parser.add_argument("--workers", type=int, default=8, help="Parallel download threads (default 8)")
     return parser.parse_args(argv)
 
@@ -143,6 +145,11 @@ def main(argv: List[str] | None = None) -> None:
     if args.output:
         write_csv(scores, args.output)
         print(f"Wrote {len(scores)} results to {args.output}", file=sys.stderr)
+
+    if args.html_report:
+        universe_label = "S&P 500 constituents" if args.sp500 else "scanned tickers"
+        write_html_report(scores, args.html_report, universe_size=len(tickers), universe_label=universe_label)
+        print(f"Wrote HTML report to {args.html_report}", file=sys.stderr)
 
     filtered = [s for s in scores if s.score >= args.min_score]
     if args.top:

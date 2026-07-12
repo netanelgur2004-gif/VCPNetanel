@@ -58,6 +58,7 @@ python -m vcp_scanner.scanner --sp500 --min-score 60 --output results.csv
 - `--top N` — only display the top N results
 - `--min-score N` — only display results scoring at or above N (0-100)
 - `--output PATH.csv` — write the full ranked results to a CSV file
+- `--html-report PATH.html` — write the full ranked results to a self-contained, sortable/searchable HTML dashboard
 - `--workers N` — parallel download threads (default 8)
 
 ## Output
@@ -81,5 +82,7 @@ vcp_scanner/
   rs_rating.py    # relative strength percentile ranking
   scorer.py       # combines everything into the final 0-100 score
   universe.py     # ticker universe helpers (S&P 500, file, explicit list)
+  report.py       # renders results into the sortable/searchable HTML dashboard
+  templates/report_template.html  # dashboard markup/CSS/JS, tokens filled in by report.py
   scanner.py      # CLI entry point
 ```
