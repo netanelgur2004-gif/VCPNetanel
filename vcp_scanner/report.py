@@ -38,6 +38,7 @@ def build_html_report(
     universe_size: int,
     universe_label: str = "S&P 500 constituents",
     run_date: Optional[str] = None,
+    fear_greed: Optional[dict] = None,
 ) -> str:
     """Render the ranked results into the self-contained HTML dashboard."""
     rows = sorted((_score_to_row(s) for s in scores), key=lambda r: r["s"], reverse=True)
@@ -50,6 +51,7 @@ def build_html_report(
         "__SCANNED__": str(len(scores)),
         "__UNIVERSE_SIZE__": str(universe_size),
         "__DATA_JSON__": json.dumps(rows),
+        "__FNG_JSON__": json.dumps(fear_greed) if fear_greed else "null",
     }
     for token, value in replacements.items():
         html = html.replace(token, value)
@@ -62,6 +64,13 @@ def write_html_report(
     universe_size: int,
     universe_label: str = "S&P 500 constituents",
     run_date: Optional[str] = None,
+    fear_greed: Optional[dict] = None,
 ) -> None:
-    html = build_html_report(scores, universe_size, universe_label=universe_label, run_date=run_date)
+    html = build_html_report(
+        scores,
+        universe_size,
+        universe_label=universe_label,
+        run_date=run_date,
+        fear_greed=fear_greed,
+    )
     Path(path).write_text(html)

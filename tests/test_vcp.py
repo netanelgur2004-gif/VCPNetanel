@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from vcp_scanner.market_sentiment import fetch_fear_greed_index
 from vcp_scanner.scorer import score_ticker, suggest_stop_loss
 from vcp_scanner.swings import find_swing_points
 from vcp_scanner.trend_template import evaluate_trend_template
@@ -151,6 +152,14 @@ def test_score_ticker_includes_sane_stop_loss():
     assert 0 < result.stop_loss_price < result.last_close
     assert 0 < result.stop_loss_pct <= 8.1  # small tolerance for the 1% whipsaw buffer
     assert result.stop_loss_basis
+
+
+def test_fear_greed_index_degrades_gracefully_on_network_failure(monkeypatch):
+    def _boom(*args, **kwargs):
+        raise ConnectionError("no network in this test")
+
+    monkeypatch.setattr("vcp_scanner.market_sentiment.requests.get", _boom)
+    assert fetch_fear_greed_index() is None
 
 
 if __name__ == "__main__":

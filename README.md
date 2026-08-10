@@ -27,6 +27,15 @@ This is a heuristic approximation of a discretionary chart pattern, not a
 guarantee of anything — always eyeball the chart before trading a high-scoring
 result.
 
+Each run also fetches CNN's **Fear & Greed Index** (overall market sentiment
+across 7 signals: momentum, price strength/breadth, put/call ratio, volatility,
+junk bond demand, safe-haven demand) and shows it at the top of the HTML
+dashboard. It's market-wide context, not a per-stock signal, so it doesn't
+affect any individual VCP score — but Minervini-style breakouts tend to work
+best when the broader tape is healthy rather than in extreme-fear conditions.
+If CNN's endpoint is unreachable, the scan still runs fine; the gauge is just
+omitted for that run.
+
 ## Install
 
 ```bash
@@ -97,6 +106,7 @@ vcp_scanner/
   rs_rating.py    # relative strength percentile ranking
   scorer.py       # combines everything into the final 0-100 score
   universe.py     # ticker universe helpers (S&P 500, file, explicit list)
+  market_sentiment.py  # CNN Fear & Greed Index fetcher
   report.py       # renders results into the sortable/searchable HTML dashboard
   templates/report_template.html  # dashboard markup/CSS/JS, tokens filled in by report.py
   scanner.py      # CLI entry point

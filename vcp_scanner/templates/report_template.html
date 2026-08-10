@@ -171,6 +171,84 @@
     margin-left: 6px;
   }
 
+  .sentiment-panel {
+    margin-top: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 28px;
+    align-items: center;
+  }
+  .sentiment-main { display: flex; align-items: center; gap: 14px; }
+  .fng-gauge { width: 130px; height: auto; flex-shrink: 0; }
+  #fng-needle { transition: transform 0.6s cubic-bezier(0.34, 1.4, 0.64, 1); }
+  .sentiment-readout .label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+  .score-line { display: flex; align-items: baseline; gap: 9px; }
+  .fng-score {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 30px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .fng-rating-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    text-transform: capitalize;
+  }
+  .fng-trend {
+    margin-top: 7px;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: ui-monospace, monospace;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .fng-components {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    flex: 1;
+    min-width: 240px;
+    padding-left: 20px;
+    border-left: 1px solid var(--border);
+  }
+  .fng-component { display: flex; flex-direction: column; gap: 4px; min-width: 132px; }
+  .fng-component .fc-label {
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fng-component .fc-bar {
+    position: relative;
+    width: 100%;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .fng-component .fc-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; }
+  .fng-component .fc-val { font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim); }
+
+  @media (max-width: 720px) {
+    .sentiment-panel { flex-direction: column; align-items: flex-start; }
+    .fng-components { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; }
+  }
+
   .controls {
     display: flex;
     align-items: center;
@@ -346,6 +424,29 @@
       shrinking pullback legs, volume dry-up, and range tightness near the pivot.
     </p>
     <div class="stat-row" id="stat-row"></div>
+
+    <div class="sentiment-panel" id="sentiment-panel" hidden>
+      <div class="sentiment-main">
+        <svg class="fng-gauge" viewBox="0 0 200 118" aria-hidden="true">
+          <defs>
+            <linearGradient id="fngGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="var(--bad)"></stop>
+              <stop offset="50%" stop-color="var(--accent)"></stop>
+              <stop offset="100%" stop-color="var(--good)"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M20,100 A80,80 0 0 1 180,100" fill="none" stroke="url(#fngGrad)" stroke-width="14" stroke-linecap="round"></path>
+          <line id="fng-needle" x1="100" y1="100" x2="100" y2="32" stroke="var(--text)" stroke-width="3" stroke-linecap="round" transform="rotate(0 100 100)"></line>
+          <circle cx="100" cy="100" r="5" fill="var(--text)"></circle>
+        </svg>
+        <div class="sentiment-readout">
+          <div class="label">CNN Fear &amp; Greed Index</div>
+          <div class="score-line"><span id="fng-score" class="fng-score">—</span><span id="fng-rating" class="fng-rating-badge"></span></div>
+          <div class="fng-trend" id="fng-trend"></div>
+        </div>
+      </div>
+      <div class="fng-components" id="fng-components"></div>
+    </div>
   </div>
 </header>
 
@@ -387,6 +488,12 @@
   </div>
 
   <footer>
+    <strong>Fear &amp; Greed Index</strong> (above, when available) is CNN's market-wide
+    sentiment gauge across 7 signals (momentum, price strength/breadth, put/call ratio,
+    volatility, junk bond demand, safe haven demand) — it's context on the overall
+    market regime, not a per-stock signal, and isn't part of any VCP score below.
+    Minervini-style breakouts tend to work best when the tape is healthy, not in
+    extreme-fear conditions.<br><br>
     <strong>Reading this table:</strong> Trend is Minervini's 8-point Stage-2 checklist
     (price/MA stacking, 52-week range, relative strength). Legs is the number of detected
     contraction pullbacks on the weekly chart. Vol Dry-Up and Tightness are 0–100
@@ -404,9 +511,11 @@
 </div>
 
 <script id="vcp-data" type="application/json">__DATA_JSON__</script>
+<script id="fng-data" type="application/json">__FNG_JSON__</script>
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('vcp-data').textContent);
+  var fng = JSON.parse(document.getElementById('fng-data').textContent);
   var tbody = document.getElementById('tbody');
   var sortKey = 's', sortDir = -1;
   var minScore = 0;
@@ -472,6 +581,43 @@
     tbody.innerHTML = html;
   }
 
+  function renderSentiment() {
+    var panel = document.getElementById('sentiment-panel');
+    if (!fng) { panel.hidden = true; return; }
+    panel.hidden = false;
+
+    var deg = (fng.score / 100) * 180 - 90;
+    document.getElementById('fng-needle').setAttribute('transform', 'rotate(' + deg + ' 100 100)');
+    document.getElementById('fng-score').textContent = fng.score.toFixed(1);
+
+    var ratingClass = /greed/.test(fng.rating) ? 'good' : (/fear/.test(fng.rating) ? 'bad' : 'accent');
+    var badge = document.getElementById('fng-rating');
+    badge.textContent = fng.rating;
+    badge.style.background = 'var(--' + ratingClass + '-wash)';
+    badge.style.color = 'var(--' + ratingClass + ')';
+
+    var deltas = [];
+    function addDelta(label, v) {
+      if (v === null || v === undefined) return;
+      var diff = fng.score - v;
+      var sign = diff >= 0 ? '+' : '';
+      deltas.push(label + ' ' + v.toFixed(0) + ' (' + sign + diff.toFixed(0) + ')');
+    }
+    addDelta('prev close', fng.previous_close);
+    addDelta('1w ago', fng.previous_1_week);
+    addDelta('1m ago', fng.previous_1_month);
+    addDelta('1y ago', fng.previous_1_year);
+    document.getElementById('fng-trend').textContent = deltas.join('   ·   ');
+
+    var compHtml = (fng.components || []).map(function (c) {
+      var cls = /greed/.test(c.rating) ? 'good' : (/fear/.test(c.rating) ? 'bad' : 'accent');
+      return '<div class="fng-component"><span class="fc-label">' + c.label + '</span>' +
+        '<span class="fc-bar"><span style="width:' + c.score + '%; background:var(--' + cls + ')"></span></span>' +
+        '<span class="fc-val">' + c.score.toFixed(0) + ' · ' + c.rating + '</span></div>';
+    }).join('');
+    document.getElementById('fng-components').innerHTML = compHtml;
+  }
+
   function renderStats() {
     var scores = data.map(function (r) { return r.s; }).sort(function (a, b) { return a - b; });
     var median = scores[Math.floor(scores.length / 2)];
@@ -515,6 +661,7 @@
     render();
   });
 
+  renderSentiment();
   renderStats();
   render();
 })();

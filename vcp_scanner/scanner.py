@@ -9,6 +9,7 @@ from typing import List
 from tabulate import tabulate
 
 from .data import fetch_many
+from .market_sentiment import fetch_fear_greed_index
 from .report import write_html_report
 from .rs_rating import compute_rs_ratings
 from .scorer import VCPScore, score_ticker
@@ -151,9 +152,25 @@ def main(argv: List[str] | None = None) -> None:
         write_csv(scores, args.output)
         print(f"Wrote {len(scores)} results to {args.output}", file=sys.stderr)
 
+    print("Fetching Fear & Greed Index...", file=sys.stderr)
+    fear_greed = fetch_fear_greed_index()
+    if fear_greed:
+        print(
+            f"Fear & Greed Index: {fear_greed['score']:.1f} ({fear_greed['rating']})",
+            file=sys.stderr,
+        )
+    else:
+        print("Fear & Greed Index unavailable this run.", file=sys.stderr)
+
     if args.html_report:
         universe_label = "S&P 500 constituents" if args.sp500 else "scanned tickers"
-        write_html_report(scores, args.html_report, universe_size=len(tickers), universe_label=universe_label)
+        write_html_report(
+            scores,
+            args.html_report,
+            universe_size=len(tickers),
+            universe_label=universe_label,
+            fear_greed=fear_greed,
+        )
         print(f"Wrote HTML report to {args.html_report}", file=sys.stderr)
 
     filtered = [s for s in scores if s.score >= args.min_score]
