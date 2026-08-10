@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vcp_scanner.scorer import score_ticker
+from vcp_scanner.scorer import score_ticker, suggest_stop_loss
 from vcp_scanner.swings import find_swing_points
 from vcp_scanner.trend_template import evaluate_trend_template
 
@@ -122,6 +122,35 @@ def test_flat_random_walk_scores_lower_than_clean_vcp():
     vcp_score = score_ticker("VCP", vcp_df, rs_rating=85).score
 
     assert vcp_score > flat_score
+
+
+def test_suggest_stop_loss_uses_tighter_of_structural_and_risk_cap():
+    # Structural low is tighter than the 8% cap -> use it.
+    stop, pct, basis = suggest_stop_loss(last_close=100.0, structural_low=95.0)
+    assert stop == pytest.approx(95.0 * 0.99)
+    assert pct < 8.0
+    assert "contraction" in basis
+
+    # Structural low is far below entry -> the 8% cap is tighter, use it instead.
+    stop, pct, basis = suggest_stop_loss(last_close=100.0, structural_low=70.0)
+    assert stop == pytest.approx(92.0)
+    assert pct == pytest.approx(8.0)
+    assert "max-risk" in basis
+
+    # No structural low available -> fall back to the risk cap.
+    stop, pct, basis = suggest_stop_loss(last_close=50.0, structural_low=None)
+    assert stop == pytest.approx(46.0)
+    assert pct == pytest.approx(8.0)
+
+
+def test_score_ticker_includes_sane_stop_loss():
+    prices, vols = _synthetic_vcp_series()
+    df = _make_df(prices, vols)
+    result = score_ticker("TEST", df, rs_rating=85)
+
+    assert 0 < result.stop_loss_price < result.last_close
+    assert 0 < result.stop_loss_pct <= 8.1  # small tolerance for the 1% whipsaw buffer
+    assert result.stop_loss_basis
 
 
 if __name__ == "__main__":

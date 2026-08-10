@@ -1,4 +1,12 @@
 <title>VCP Scanner — S&amp;P 500 Results</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#9c6a24">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VCP Scanner">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlZDUCBNYXRjaCBTY2FubmVyIiwgInNob3J0X25hbWUiOiAiVkNQIFNjYW5uZXIiLCAiZGVzY3JpcHRpb24iOiAiUyZQIDUwMCBzdG9ja3MgcmFua2VkIGJ5IGhvdyBjbG9zZWx5IHRoZXkgbWF0Y2ggTWFyayBNaW5lcnZpbmkncyBWQ1AgcGF0dGVybi4iLCAic3RhcnRfdXJsIjogIi4iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgImJhY2tncm91bmRfY29sb3IiOiAiI2VlZjFlZSIsICJ0aGVtZV9jb2xvciI6ICIjOWM2YTI0IiwgImljb25zIjogW3sic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0F4TURBZ01UQXdJajQ4Y21WamRDQjNhV1IwYUQwaU1UQXdJaUJvWldsbmFIUTlJakV3TUNJZ2NuZzlJakl5SWlCbWFXeHNQU0lqT1dNMllUSTBJaTgrUEhCaGRHZ2daRDBpVFRFMUlEY3dJRXd6TlNBME1DQk1ORFVnTlRVZ1REWXdJREkxSUV3Mk9DQXpOU0JNT0RVZ01UVWlJSE4wY205clpUMGlJMlptWm1abVppSWdjM1J5YjJ0bExYZHBaSFJvUFNJM0lpQm1hV3hzUFNKdWIyNWxJaUJ6ZEhKdmEyVXRiR2x1WldOaGNEMGljbTkxYm1RaUlITjBjbTlyWlMxc2FXNWxhbTlwYmowaWNtOTFibVFpTHo0OEwzTjJaejQ9IiwgInNpemVzIjogImFueSIsICJ0eXBlIjogImltYWdlL3N2Zyt4bWwiLCAicHVycG9zZSI6ICJhbnkifV19">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIyIiBmaWxsPSIjOWM2YTI0Ii8+PHBhdGggZD0iTTE1IDcwIEwzNSA0MCBMNDUgNTUgTDYwIDI1IEw2OCAzNSBMODUgMTUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSI3IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=">
 <style>
   :root {
     --bg: #eef1ee;
@@ -231,7 +239,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 13.5px;
-    min-width: 920px;
+    min-width: 1020px;
   }
   thead th {
     position: sticky; top: 0;
@@ -371,6 +379,7 @@
           <th data-key="rs" class="num"><button>RS <span class="arrow">▾</span></button></th>
           <th data-key="px" class="num"><button>Last <span class="arrow">▾</span></button></th>
           <th data-key="d" class="num"><button>Extension <span class="arrow">▾</span></button></th>
+          <th data-key="sl" class="num"><button>Stop-Loss <span class="arrow">▾</span></button></th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -385,7 +394,10 @@
     Minervini's usual floor). Extension is how far the last close sits above (+) or
     below (−) the confirmed pivot (the base's high / breakout trigger). Scores
     peak for setups sitting close to the pivot on either side; stocks already run
-    well past it are marked down as extended, no longer an ideal entry.
+    well past it are marked down as extended, no longer an ideal entry. Stop-Loss
+    is a suggested exit price: just under the low of the most recent contraction
+    when that's tighter, otherwise an 8% hard cap on loss from the last close —
+    hover a value to see which basis applies.
     This is a heuristic pattern match, not investment advice — always confirm on the
     chart before acting on a score.
   </footer>
@@ -453,6 +465,7 @@
         '<td class="num mono ' + rsClass + '">' + fmtNum(r.rs) + '</td>' +
         '<td class="num mono">$' + r.px.toFixed(2) + '</td>' +
         '<td class="num mono ' + distClass + '">' + distLabel + '</td>' +
+        '<td class="num mono text-bad" title="' + r.slb + '">$' + r.sl.toFixed(2) + ' (-' + r.slp.toFixed(1) + '%)</td>' +
         '</tr>'
       );
     }).join('');

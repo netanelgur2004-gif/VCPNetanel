@@ -62,6 +62,8 @@ class VCPAnalysis:
     pivot_extension_pct: Optional[float] = None
     pivot_proximity_score: float = 0.0
 
+    last_contraction_low: Optional[float] = None
+
 
 def _resample_weekly(df: pd.DataFrame) -> pd.DataFrame:
     """Resample daily OHLCV to weekly bars.
@@ -86,15 +88,17 @@ def _find_base_sequence(window_df: pd.DataFrame, pct_threshold: float) -> List[S
     return swings[first_high:]
 
 
-def analyze_contractions(seq: List[SwingPoint]) -> tuple[List[float], float]:
+def analyze_contractions(seq: List[SwingPoint]) -> tuple[List[float], float, List[tuple]]:
     down_legs: List[float] = []
+    leg_prices: List[tuple] = []  # (high_price, low_price) per confirmed contraction, chronological
     for i in range(0, len(seq) - 1, 2):
         hi, lo = seq[i], seq[i + 1]
         if hi.kind == "high" and lo.kind == "low" and hi.price > 0:
             down_legs.append((hi.price - lo.price) / hi.price * 100.0)
+            leg_prices.append((hi.price, lo.price))
 
     if not down_legs:
-        return [], 0.0
+        return [], 0.0, []
 
     if len(down_legs) == 1:
         pattern_score = 50.0
@@ -107,7 +111,7 @@ def analyze_contractions(seq: List[SwingPoint]) -> tuple[List[float], float]:
         pattern_score = sum(pair_scores) / len(pair_scores)
 
     score = 0.6 * pattern_score + 0.4 * _count_score(len(down_legs))
-    return down_legs, score
+    return down_legs, score, leg_prices
 
 
 def analyze_volume_dryup(
@@ -202,10 +206,11 @@ def analyze_vcp(df: pd.DataFrame, pct_threshold: float = 8.0, base_lookback: int
     if not seq:
         return result
 
-    down_legs, contraction_score = analyze_contractions(seq)
+    down_legs, contraction_score, leg_prices = analyze_contractions(seq)
     result.contractions_pct = [round(x, 2) for x in down_legs]
     result.num_contractions = len(down_legs)
     result.contraction_score = contraction_score
+    result.last_contraction_low = leg_prices[-1][1] if leg_prices else None
 
     base_start = seq[0]
     daily_pos = int(window_df.index.searchsorted(base_start.date))

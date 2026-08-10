@@ -27,6 +27,9 @@ def _score_to_row(s: VCPScore) -> dict:
         "pv": round(s.vcp.pivot_price, 2) if s.vcp.pivot_price is not None else None,
         "d": round(s.vcp.pivot_extension_pct, 1) if s.vcp.pivot_extension_pct is not None else None,
         "pp": round(s.vcp.pivot_proximity_score, 0),
+        "sl": s.stop_loss_price,
+        "slp": s.stop_loss_pct,
+        "slb": s.stop_loss_basis,
     }
 
 

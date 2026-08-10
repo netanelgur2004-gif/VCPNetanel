@@ -89,11 +89,12 @@ def format_table(scores: List[VCPScore]) -> str:
                 f"{s.last_close:.2f}",
                 f"{s.vcp.pivot_price:.2f}" if s.vcp.pivot_price else "-",
                 ext_str,
+                f"{s.stop_loss_price:.2f} (-{s.stop_loss_pct:.1f}%)",
             ]
         )
     headers = [
         "Ticker", "VCP Score", "Trend", "Contractions", "Vol Dry-Up",
-        "Tightness", "Prior Uptrend", "RS", "Last", "Pivot", "Vs. Pivot",
+        "Tightness", "Prior Uptrend", "RS", "Last", "Pivot", "Vs. Pivot", "Stop-Loss",
     ]
     return tabulate(rows, headers=headers, tablefmt="simple")
 
@@ -108,7 +109,8 @@ def write_csv(scores: List[VCPScore], path: str) -> None:
                 "ticker", "vcp_score", "trend_passed", "trend_total", "num_contractions",
                 "contractions_pct", "volume_dryup_score", "tightness_score",
                 "prior_uptrend_pct", "rs_rating", "last_close", "pivot_price",
-                "pivot_extension_pct", "pivot_proximity_score", "last_date",
+                "pivot_extension_pct", "pivot_proximity_score",
+                "stop_loss_price", "stop_loss_pct", "stop_loss_basis", "last_date",
             ]
         )
         for s in scores:
@@ -128,6 +130,9 @@ def write_csv(scores: List[VCPScore], path: str) -> None:
                     s.vcp.pivot_price if s.vcp.pivot_price is not None else "",
                     round(s.vcp.pivot_extension_pct, 1) if s.vcp.pivot_extension_pct is not None else "",
                     round(s.vcp.pivot_proximity_score, 1),
+                    s.stop_loss_price,
+                    s.stop_loss_pct,
+                    s.stop_loss_basis,
                     s.last_date.date().isoformat(),
                 ]
             )

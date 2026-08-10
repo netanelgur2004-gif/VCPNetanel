@@ -19,6 +19,32 @@ WEIGHTS = {
     "pivot_proximity": 0.15,
 }
 
+MAX_RISK_PCT = 8.0  # Minervini's usual hard cap on loss from entry
+
+
+def suggest_stop_loss(
+    last_close: float, structural_low: Optional[float], max_risk_pct: float = MAX_RISK_PCT
+) -> tuple[float, float, str]:
+    """Suggest a stop-loss price using Minervini's approach: the tighter of
+    (a) just under the last contraction's low (a real support level breaking
+    down would invalidate the base), or (b) a hard cap on loss from the
+    current price. Never risk more than `max_risk_pct`, but take a tighter
+    technical stop when the base offers one.
+    """
+    risk_cap_stop = last_close * (1 - max_risk_pct / 100.0)
+
+    if structural_low is not None and 0 < structural_low < last_close:
+        structural_stop = structural_low * 0.99  # a hair under the low, avoid whipsaw
+        if structural_stop >= risk_cap_stop:
+            stop_price, basis = structural_stop, "below last contraction's low"
+        else:
+            stop_price, basis = risk_cap_stop, f"{max_risk_pct:.0f}% max-risk cap"
+    else:
+        stop_price, basis = risk_cap_stop, f"{max_risk_pct:.0f}% max-risk cap"
+
+    risk_pct = (last_close - stop_price) / last_close * 100.0
+    return stop_price, risk_pct, basis
+
 
 @dataclass
 class VCPScore:
@@ -29,6 +55,9 @@ class VCPScore:
     rs_rating: Optional[float]
     last_close: float
     last_date: pd.Timestamp
+    stop_loss_price: float = 0.0
+    stop_loss_pct: float = 0.0
+    stop_loss_basis: str = ""
 
     def component_scores(self) -> dict:
         return {
@@ -55,12 +84,18 @@ def score_ticker(ticker: str, df: pd.DataFrame, rs_rating: Optional[float] = Non
     }
     total = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)
 
+    last_close = float(df["Close"].iloc[-1])
+    stop_price, stop_pct, stop_basis = suggest_stop_loss(last_close, vcp.last_contraction_low)
+
     return VCPScore(
         ticker=ticker,
         score=round(total, 1),
         trend=trend,
         vcp=vcp,
         rs_rating=rs_rating,
-        last_close=float(df["Close"].iloc[-1]),
+        last_close=last_close,
         last_date=df.index[-1],
+        stop_loss_price=round(stop_price, 2),
+        stop_loss_pct=round(stop_pct, 1),
+        stop_loss_basis=stop_basis,
     )

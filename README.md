@@ -67,8 +67,23 @@ Each row includes: ticker, overall VCP score, Trend Template pass count
 (out of 8), number of detected contractions, whether volume is drying up,
 tightness %, prior uptrend %, RS rating, last close, an estimated pivot
 (the high of the base — a breakout above this on strong volume is the
-classic VCP buy trigger), and how far price currently sits above or below
-that pivot.
+classic VCP buy trigger), how far price currently sits above or below
+that pivot, and a suggested stop-loss: whichever is tighter of (a) just
+under the low of the most recent contraction, or (b) an 8% hard cap on
+loss from the last close (Minervini's usual max-risk rule).
+
+## Using the HTML dashboard as a home-screen app
+
+`--html-report` produces a self-contained page with a web app manifest and
+iOS meta tags, so it can be installed like an app instead of just bookmarked:
+
+- **iPhone (Safari):** open the page → Share button → "Add to Home Screen".
+- **Android (Chrome):** open the page → menu (⋮) → "Add to Home Screen" / "Install app".
+
+It then launches full-screen from your home screen icon, no browser chrome.
+This isn't a native App Store app — no push notifications, background
+refresh, or app-store listing — but it behaves like an app for viewing the
+latest scan.
 
 ## Project layout
 
