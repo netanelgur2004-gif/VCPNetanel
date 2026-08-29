@@ -121,6 +121,12 @@ best-effort/heuristic — keyword matches can occasionally pick up an
 off-target headline, so treat the "Reason" column as a lead to verify, not a
 verdict.
 
+Pass `--require-market-open` for scheduled/cron runs so the scan skips itself
+(no output, exit 0) on weekends and market holidays, rather than re-reporting
+yesterday's close as if it were new. This checks SPY's most recently
+published daily bar against today's date (`market_calendar.py`) instead of a
+hardcoded holiday list, so it doesn't need updating year to year.
+
 ## Project layout
 
 ```
@@ -136,6 +142,7 @@ vcp_scanner/
   market_sentiment.py  # CNN Fear & Greed Index fetcher
   news.py         # best-effort recent-news lookup + catalyst-keyword matching
   extension_scan.py  # SMA20 extension screen + catalyst/price-shock/sector classification
+  market_calendar.py  # was the market open today? (for skipping scheduled runs on holidays)
   report.py       # renders results into the sortable/searchable HTML dashboard
   templates/report_template.html  # dashboard markup/CSS/JS, tokens filled in by report.py
   scanner.py      # CLI entry point (VCP score)

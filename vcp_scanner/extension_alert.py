@@ -13,6 +13,7 @@ from tabulate import tabulate
 
 from .data import fetch_many
 from .extension_scan import ExtensionResult, scan_sma20_extension
+from .market_calendar import market_was_open_today
 from .universe import sp500_constituents
 
 
@@ -30,6 +31,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=8, help="Parallel download threads (default 8)")
     parser.add_argument(
         "--no-news", action="store_true", help="Skip the news fetch (faster; price-shock detection only)"
+    )
+    parser.add_argument(
+        "--require-market-open",
+        action="store_true",
+        help="Exit immediately (no output) if the US market wasn't open today (weekend/holiday). "
+        "Meant for scheduled/cron runs so they don't re-report yesterday's close as new.",
     )
     return parser.parse_args(argv)
 
@@ -87,6 +94,11 @@ def run_scan(args: argparse.Namespace) -> List[ExtensionResult]:
 
 def main(argv: List[str] | None = None) -> None:
     args = parse_args(argv)
+
+    if args.require_market_open and not market_was_open_today():
+        print("Market wasn't open today (weekend/holiday) - skipping scan.", file=sys.stderr)
+        return
+
     results = run_scan(args)
     print(format_results(results))
 

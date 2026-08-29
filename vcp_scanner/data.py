@@ -70,16 +70,23 @@ def _fetch_via_yahoo_chart_api(ticker: str, period: str) -> Optional[pd.DataFram
     if not (open_ and high and low and close and volume):
         return None
 
+    full_index = pd.to_datetime(timestamps, unit="s").tz_localize(None)
     df = pd.DataFrame(
         {"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume},
-        index=pd.to_datetime(timestamps, unit="s").tz_localize(None),
+        index=full_index,
     )
     df = df.dropna(subset=["Close"])
     if df.empty:
         return None
 
     if adjclose:
-        adj_series = pd.Series(adjclose, index=df.index[: len(adjclose)] if len(adjclose) != len(df) else df.index)
+        # adjclose parallels the *original* timestamps array (before the
+        # dropna above), so align it there first, then reindex onto the
+        # post-dropna df.index by actual timestamp -- not by position, since
+        # dropna may have removed different rows than a length mismatch here
+        # would suggest.
+        n = min(len(adjclose), len(full_index))
+        adj_series = pd.Series(adjclose[:n], index=full_index[:n])
         adj_series = adj_series.reindex(df.index)
         ratio = (adj_series / df["Close"]).fillna(1.0)
         for col in ("Open", "High", "Low", "Close"):
@@ -88,12 +95,14 @@ def _fetch_via_yahoo_chart_api(ticker: str, period: str) -> Optional[pd.DataFram
     return df[REQUIRED_COLUMNS]
 
 
-def fetch_history(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
-    """Fetch daily OHLCV history for a single ticker.
+def fetch_history_raw(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
+    """Fetch daily OHLCV history for a single ticker, with no minimum-length gate.
 
     Tries the direct Yahoo chart API first (fast, no session/crumb dance),
-    then falls back to yfinance if that fails for some reason.
-    Returns None if the data is missing, too short, or malformed.
+    then falls back to yfinance if that fails for some reason. Returns None
+    if the data is missing or malformed. Prefer `fetch_history` unless you
+    specifically need short/partial histories (e.g. checking the latest
+    trading day via a few days of data).
     """
     df = _fetch_via_yahoo_chart_api(ticker, period)
     if df is None or df.empty:
@@ -101,9 +110,19 @@ def fetch_history(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
 
     if df is None or df.empty:
         return None
-    if len(df) < MIN_ROWS:
-        return None
+    return df
 
+
+def fetch_history(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
+    """Fetch daily OHLCV history for a single ticker.
+
+    Same as `fetch_history_raw`, but additionally returns None if there's
+    less than `MIN_ROWS` of history (not enough for the 200-day MA / trend
+    checks).
+    """
+    df = fetch_history_raw(ticker, period)
+    if df is None or len(df) < MIN_ROWS:
+        return None
     return df
 
 
