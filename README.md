@@ -94,6 +94,39 @@ This isn't a native App Store app — no push notifications, background
 refresh, or app-store listing — but it behaves like an app for viewing the
 latest scan.
 
+## SMA20 extension / catalyst screen
+
+Separate from the VCP score, `vcp_scanner.extension_alert` flags S&P 500
+stocks trading 15-20% above or below their 20-day SMA (a looser "is this name
+unusually extended" screen, not a VCP setup check), and tries to explain
+*why*: a big single-day price/volume shock, keyword-matched recent news
+(earnings, guidance, M&A, FDA, upgrades/downgrades, etc. — see
+`news.CATALYST_KEYWORDS`), or a sector-wide move (via each stock's GICS
+sector average deviation across the scanned universe). Results are sorted
+with the no-catalyst names first, since those are the ones worth a second
+look — extended purely by sector/market drift rather than a name-specific
+event.
+
+```bash
+# Default 15-20% band, 20-day lookback for news/price-shock detection
+python -m vcp_scanner.extension_alert
+
+# Wider/narrower band, shorter lookback, skip the news fetch (faster)
+python -m vcp_scanner.extension_alert --low 10 --high 25 --lookback-days 10 --no-news
+```
+
+News comes from Yahoo Finance's public search endpoint via plain `requests`
+(same TLS-fingerprinting workaround as `data.py`'s price fetch) and is
+best-effort/heuristic — keyword matches can occasionally pick up an
+off-target headline, so treat the "Reason" column as a lead to verify, not a
+verdict.
+
+Pass `--require-market-open` for scheduled/cron runs so the scan skips itself
+(no output, exit 0) on weekends and market holidays, rather than re-reporting
+yesterday's close as if it were new. This checks SPY's most recently
+published daily bar against today's date (`market_calendar.py`) instead of a
+hardcoded holiday list, so it doesn't need updating year to year.
+
 ## Project layout
 
 ```
@@ -105,9 +138,13 @@ vcp_scanner/
   trend_template.py  # Minervini 8-point trend template
   rs_rating.py    # relative strength percentile ranking
   scorer.py       # combines everything into the final 0-100 score
-  universe.py     # ticker universe helpers (S&P 500, file, explicit list)
+  universe.py     # ticker universe helpers (S&P 500 + sector, file, explicit list)
   market_sentiment.py  # CNN Fear & Greed Index fetcher
+  news.py         # best-effort recent-news lookup + catalyst-keyword matching
+  extension_scan.py  # SMA20 extension screen + catalyst/price-shock/sector classification
+  market_calendar.py  # was the market open today? (for skipping scheduled runs on holidays)
   report.py       # renders results into the sortable/searchable HTML dashboard
   templates/report_template.html  # dashboard markup/CSS/JS, tokens filled in by report.py
-  scanner.py      # CLI entry point
+  scanner.py      # CLI entry point (VCP score)
+  extension_alert.py  # CLI entry point (SMA20 extension/catalyst screen)
 ```

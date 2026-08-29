@@ -28,15 +28,24 @@ def tickers_from_csv_arg(arg: str) -> List[str]:
     return [t.strip() for t in arg.split(",") if t.strip()]
 
 
-def sp500_tickers() -> List[str]:
+def sp500_constituents() -> pd.DataFrame:
+    """S&P 500 constituents with columns `Symbol` and `Sector` (GICS sector).
+
+    Falls back to `FALLBACK_SP500_SAMPLE` with an "Unknown" sector if the
+    Wikipedia fetch fails (e.g. no network).
+    """
     try:
         resp = requests.get(SP500_WIKI_URL, headers=_HEADERS, timeout=15)
         resp.raise_for_status()
         tables = pd.read_html(io.StringIO(resp.text))
         df = tables[0]
-        tickers = df["Symbol"].astype(str).str.replace(".", "-", regex=False).tolist()
-        if tickers:
-            return tickers
+        symbols = df["Symbol"].astype(str).str.replace(".", "-", regex=False)
+        if len(symbols):
+            return pd.DataFrame({"Symbol": symbols, "Sector": df["GICS Sector"]})
     except Exception:
         pass
-    return list(FALLBACK_SP500_SAMPLE)
+    return pd.DataFrame({"Symbol": FALLBACK_SP500_SAMPLE, "Sector": "Unknown"})
+
+
+def sp500_tickers() -> List[str]:
+    return sp500_constituents()["Symbol"].tolist()
