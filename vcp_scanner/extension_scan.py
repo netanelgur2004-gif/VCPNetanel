@@ -84,6 +84,62 @@ def detect_price_shock(df: pd.DataFrame, lookback_days: int = 20) -> Optional[Pr
     return None
 
 
+def _sma20_deviations(histories: Dict[str, pd.DataFrame]) -> Dict[str, float]:
+    deviations: Dict[str, float] = {}
+    for ticker, df in histories.items():
+        if len(df) < 20:
+            continue
+        sma20 = df["Close"].rolling(20).mean().iloc[-1]
+        if pd.isna(sma20) or sma20 == 0:
+            continue
+        last_close = float(df["Close"].iloc[-1])
+        deviations[ticker] = (last_close - sma20) / sma20 * 100.0
+    return deviations
+
+
+def _sector_avg_deviations(
+    deviations: Dict[str, float], sector_map: Optional[Dict[str, str]]
+) -> Dict[str, float]:
+    sector_devs: Dict[str, List[float]] = {}
+    if sector_map:
+        for ticker, dev in deviations.items():
+            sector = sector_map.get(ticker)
+            if sector:
+                sector_devs.setdefault(sector, []).append(dev)
+    return {s: sum(v) / len(v) for s, v in sector_devs.items()}
+
+
+def _build_result(
+    ticker: str,
+    dev: float,
+    direction: str,
+    histories: Dict[str, pd.DataFrame],
+    sector_map: Optional[Dict[str, str]],
+    sector_avg: Dict[str, float],
+    lookback_days: int,
+    fetch_news: bool,
+) -> ExtensionResult:
+    df = histories[ticker]
+    sma20 = float(df["Close"].rolling(20).mean().iloc[-1])
+    sector = sector_map.get(ticker) if sector_map else None
+    shock = detect_price_shock(df, lookback_days=lookback_days)
+    news = fetch_recent_news(ticker, lookback_days=lookback_days) if fetch_news else []
+    catalyst_news = catalyst_headlines(news)
+
+    return ExtensionResult(
+        ticker=ticker,
+        direction=direction,
+        deviation_pct=round(dev, 2),
+        last_close=round(float(df["Close"].iloc[-1]), 2),
+        sma20=round(sma20, 2),
+        sector=sector,
+        sector_avg_deviation=round(sector_avg[sector], 2) if sector and sector in sector_avg else None,
+        price_shock=shock,
+        news=news,
+        catalyst_news=catalyst_news,
+    )
+
+
 def scan_sma20_extension(
     histories: Dict[str, pd.DataFrame],
     sector_map: Optional[Dict[str, str]] = None,
@@ -101,23 +157,8 @@ def scan_sma20_extension(
     sector peers, so a sector-wide rally/selloff is visible even when no
     stock-specific news turns up.
     """
-    deviations: Dict[str, float] = {}
-    for ticker, df in histories.items():
-        if len(df) < 20:
-            continue
-        sma20 = df["Close"].rolling(20).mean().iloc[-1]
-        if pd.isna(sma20) or sma20 == 0:
-            continue
-        last_close = float(df["Close"].iloc[-1])
-        deviations[ticker] = (last_close - sma20) / sma20 * 100.0
-
-    sector_devs: Dict[str, List[float]] = {}
-    if sector_map:
-        for ticker, dev in deviations.items():
-            sector = sector_map.get(ticker)
-            if sector:
-                sector_devs.setdefault(sector, []).append(dev)
-    sector_avg = {s: sum(v) / len(v) for s, v in sector_devs.items()}
+    deviations = _sma20_deviations(histories)
+    sector_avg = _sector_avg_deviations(deviations, sector_map)
 
     results: List[ExtensionResult] = []
     for ticker, dev in deviations.items():
@@ -127,31 +168,40 @@ def scan_sma20_extension(
             direction = "below"
         else:
             continue
-
-        df = histories[ticker]
-        sma20 = float(df["Close"].rolling(20).mean().iloc[-1])
-        sector = sector_map.get(ticker) if sector_map else None
-        shock = detect_price_shock(df, lookback_days=lookback_days)
-        news = fetch_recent_news(ticker, lookback_days=lookback_days) if fetch_news else []
-        catalyst_news = catalyst_headlines(news)
-
         results.append(
-            ExtensionResult(
-                ticker=ticker,
-                direction=direction,
-                deviation_pct=round(dev, 2),
-                last_close=round(float(df["Close"].iloc[-1]), 2),
-                sma20=round(sma20, 2),
-                sector=sector,
-                sector_avg_deviation=(
-                    round(sector_avg[sector], 2) if sector and sector in sector_avg else None
-                ),
-                price_shock=shock,
-                news=news,
-                catalyst_news=catalyst_news,
-            )
+            _build_result(ticker, dev, direction, histories, sector_map, sector_avg, lookback_days, fetch_news)
         )
 
     # No-catalyst names first (what you actually want to see), biggest |deviation| first within each group.
+    results.sort(key=lambda r: (r.has_catalyst, -abs(r.deviation_pct)))
+    return results
+
+
+def top_sma20_extension(
+    histories: Dict[str, pd.DataFrame],
+    sector_map: Optional[Dict[str, str]] = None,
+    top_n: int = 10,
+    min_pct: float = 0.0,
+    lookback_days: int = 20,
+    fetch_news: bool = True,
+) -> List[ExtensionResult]:
+    """The `top_n` tickers furthest (either direction) from their 20-day SMA,
+    ignoring the fixed 15-20% band -- for "just show me a real list" rather
+    than a strict range that some days comes back nearly empty.
+
+    `min_pct` optionally still requires at least this much |deviation|.
+    """
+    deviations = _sma20_deviations(histories)
+    deviations = {t: d for t, d in deviations.items() if abs(d) >= min_pct}
+    sector_avg = _sector_avg_deviations(deviations, sector_map)
+
+    ranked = sorted(deviations.items(), key=lambda kv: abs(kv[1]), reverse=True)[:top_n]
+
+    results = [
+        _build_result(
+            ticker, dev, "above" if dev >= 0 else "below", histories, sector_map, sector_avg, lookback_days, fetch_news
+        )
+        for ticker, dev in ranked
+    ]
     results.sort(key=lambda r: (r.has_catalyst, -abs(r.deviation_pct)))
     return results

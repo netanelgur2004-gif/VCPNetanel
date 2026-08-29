@@ -12,7 +12,7 @@ from typing import List
 from tabulate import tabulate
 
 from .data import fetch_many
-from .extension_scan import ExtensionResult, scan_sma20_extension
+from .extension_scan import ExtensionResult, scan_sma20_extension, top_sma20_extension
 from .market_calendar import market_was_open_today
 from .universe import sp500_constituents
 
@@ -24,6 +24,13 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--low", type=float, default=15.0, help="Lower bound of |deviation| %% (default 15)")
     parser.add_argument("--high", type=float, default=20.0, help="Upper bound of |deviation| %% (default 20)")
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Ignore --low/--high and instead show the N stocks furthest from their SMA20 "
+        "(either direction). Useful on quiet days when the 15-20%% band comes back thin.",
+    )
     parser.add_argument(
         "--lookback-days", type=int, default=20, help="Days to look back for news/price shocks (default 20)"
     )
@@ -81,6 +88,15 @@ def run_scan(args: argparse.Namespace) -> List[ExtensionResult]:
     print(f"Fetching price history for {len(tickers)} tickers...", file=sys.stderr)
     histories = fetch_many(tickers, period=args.period, max_workers=args.workers)
     print(f"Fetched {len(histories)} tickers", file=sys.stderr)
+
+    if args.top:
+        return top_sma20_extension(
+            histories,
+            sector_map=sector_map,
+            top_n=args.top,
+            lookback_days=args.lookback_days,
+            fetch_news=not args.no_news,
+        )
 
     return scan_sma20_extension(
         histories,
