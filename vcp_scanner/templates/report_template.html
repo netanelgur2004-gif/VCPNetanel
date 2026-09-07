@@ -137,6 +137,12 @@
     line-height: 1.55;
     margin: 0;
   }
+  .dek strong { color: var(--text); }
+  .dek.filter-note {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--accent-strong);
+  }
 
   .stat-row {
     display: grid;
@@ -419,10 +425,12 @@
     <div class="eyebrow"><span class="dot"></span> Screener run · __UNIVERSE_LABEL__ · __RUN_DATE__</div>
     <h1>VCP Match Scanner</h1>
     <p class="dek">
-      __SCANNED__ of __UNIVERSE_SIZE__ __UNIVERSE_LABEL__ scored 0–100% on how closely their current
-      chart matches Mark Minervini's Volatility Contraction Pattern — trend template,
+      __TOTAL_SCORED__ of __UNIVERSE_SIZE__ __UNIVERSE_LABEL__ were scored 0–100% on how closely
+      their current chart matches Mark Minervini's Volatility Contraction Pattern — trend template,
       shrinking pullback legs, volume dry-up, and range tightness near the pivot.
+      <strong>__SHOWN__ pass this run's setup filters</strong> and are listed below.
     </p>
+    <p class="dek filter-note" id="filter-note" hidden>__FILTER_NOTE__</p>
     <div class="stat-row" id="stat-row"></div>
 
     <div class="sentiment-panel" id="sentiment-panel" hidden>
@@ -626,7 +634,7 @@
     var rsStrong = data.filter(function (r) { return r.rs >= 70; }).length;
 
     var stats = [
-      ['Scanned', data.length, 'tickers'],
+      ['Setups shown', data.length, 'passed filters'],
       ['Median score', median.toFixed(1) + '%', ''],
       ['Top match', top.s.toFixed(1) + '%', top.t],
       ['Score ≥ 70%', strong, 'of ' + data.length]
@@ -660,6 +668,9 @@
     minScore = parseFloat(chip.getAttribute('data-min'));
     render();
   });
+
+  var filterNoteEl = document.getElementById('filter-note');
+  if (filterNoteEl && filterNoteEl.textContent.trim()) { filterNoteEl.hidden = false; }
 
   renderSentiment();
   renderStats();

@@ -5,9 +5,11 @@ import pandas as pd
 import pytest
 
 from vcp_scanner.market_sentiment import fetch_fear_greed_index
-from vcp_scanner.scorer import score_ticker, suggest_stop_loss
+from vcp_scanner.scanner import filter_setups
+from vcp_scanner.scorer import VCPScore, score_ticker, suggest_stop_loss
 from vcp_scanner.swings import find_swing_points
-from vcp_scanner.trend_template import evaluate_trend_template
+from vcp_scanner.trend_template import TrendTemplateResult, evaluate_trend_template
+from vcp_scanner.vcp import VCPAnalysis
 
 
 def _make_df(closes: list[float], volumes: list[float], start="2023-01-02") -> pd.DataFrame:
@@ -160,6 +162,30 @@ def test_fear_greed_index_degrades_gracefully_on_network_failure(monkeypatch):
 
     monkeypatch.setattr("vcp_scanner.market_sentiment.requests.get", _boom)
     assert fetch_fear_greed_index() is None
+
+
+def _fake_score(ticker: str, pivot_extension_pct, base_length_days: int) -> VCPScore:
+    vcp = VCPAnalysis(pivot_extension_pct=pivot_extension_pct, base_length_days=base_length_days)
+    return VCPScore(
+        ticker=ticker,
+        score=50.0,
+        trend=TrendTemplateResult(),
+        vcp=vcp,
+        rs_rating=50,
+        last_close=100.0,
+        last_date=pd.Timestamp("2024-01-01"),
+    )
+
+
+def test_filter_setups_excludes_extended_and_short_bases():
+    scores = [
+        _fake_score("NEAR", pivot_extension_pct=1.0, base_length_days=30),
+        _fake_score("EXTENDED", pivot_extension_pct=12.0, base_length_days=30),
+        _fake_score("SHORTBASE", pivot_extension_pct=1.0, base_length_days=10),
+        _fake_score("NOBASE", pivot_extension_pct=None, base_length_days=0),
+    ]
+    kept = filter_setups(scores, max_extension_pct=5.0, min_base_weeks=4.0)
+    assert [s.ticker for s in kept] == ["NEAR"]
 
 
 if __name__ == "__main__":

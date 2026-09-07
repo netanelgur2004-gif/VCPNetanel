@@ -39,8 +39,16 @@ def build_html_report(
     universe_label: str = "S&P 500 constituents",
     run_date: Optional[str] = None,
     fear_greed: Optional[dict] = None,
+    filter_note: Optional[str] = None,
+    total_scored: Optional[int] = None,
 ) -> str:
-    """Render the ranked results into the self-contained HTML dashboard."""
+    """Render the ranked results into the self-contained HTML dashboard.
+
+    `scores` is the list actually shown (e.g. after filtering to setups near
+    the pivot with a long-enough base) -- `total_scored` is the larger count
+    that were scanned and scored before that filtering, for the "X of Y"
+    header line. If omitted, `total_scored` defaults to len(scores).
+    """
     rows = sorted((_score_to_row(s) for s in scores), key=lambda r: r["s"], reverse=True)
     html = _TEMPLATE_PATH.read_text()
     # Plain token replacement, not str.format(): the template's CSS/JS is
@@ -48,10 +56,12 @@ def build_html_report(
     replacements = {
         "__UNIVERSE_LABEL__": universe_label,
         "__RUN_DATE__": run_date or _dt.date.today().isoformat(),
-        "__SCANNED__": str(len(scores)),
+        "__SHOWN__": str(len(scores)),
+        "__TOTAL_SCORED__": str(total_scored if total_scored is not None else len(scores)),
         "__UNIVERSE_SIZE__": str(universe_size),
         "__DATA_JSON__": json.dumps(rows),
         "__FNG_JSON__": json.dumps(fear_greed) if fear_greed else "null",
+        "__FILTER_NOTE__": filter_note or "",
     }
     for token, value in replacements.items():
         html = html.replace(token, value)
@@ -65,6 +75,8 @@ def write_html_report(
     universe_label: str = "S&P 500 constituents",
     run_date: Optional[str] = None,
     fear_greed: Optional[dict] = None,
+    filter_note: Optional[str] = None,
+    total_scored: Optional[int] = None,
 ) -> None:
     html = build_html_report(
         scores,
@@ -72,5 +84,7 @@ def write_html_report(
         universe_label=universe_label,
         run_date=run_date,
         fear_greed=fear_greed,
+        filter_note=filter_note,
+        total_scored=total_scored,
     )
     Path(path).write_text(html)

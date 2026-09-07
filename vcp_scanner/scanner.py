@@ -34,6 +34,21 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", help="Write full ranked results to this CSV path")
     parser.add_argument("--html-report", help="Write full ranked results to this self-contained HTML report path")
     parser.add_argument("--workers", type=int, default=8, help="Parallel download threads (default 8)")
+    parser.add_argument(
+        "--max-extension",
+        type=float,
+        default=5.0,
+        help="Exclude stocks already more than this %% above their confirmed pivot -- "
+        "an actual VCP setup, not one that already broke out and ran (default 5.0; "
+        "pass a large number like 1000 to disable)",
+    )
+    parser.add_argument(
+        "--min-base-weeks",
+        type=float,
+        default=4.0,
+        help="Require the detected base to have been forming for at least this many "
+        "weeks of trading (default 4.0, i.e. about a month; 0 to disable)",
+    )
     return parser.parse_args(argv)
 
 
@@ -65,6 +80,29 @@ def run_scan(tickers: List[str], period: str, workers: int) -> List[VCPScore]:
     ]
     scores.sort(key=lambda s: s.score, reverse=True)
     return scores
+
+
+def filter_setups(
+    scores: List[VCPScore], max_extension_pct: float, min_base_weeks: float
+) -> List[VCPScore]:
+    """Keep only stocks with an actual, sufficiently-developed base that
+    hasn't already run away from the pivot.
+
+    This is a hard filter, not a scoring weight: a heavily-extended stock
+    can still score well overall on trend strength alone, which isn't a
+    useful answer to "give me VCP setups" -- those need to be actionable
+    near the pivot, not stocks that already broke out weeks ago.
+    """
+    min_base_days = min_base_weeks * 5.0  # ~5 trading days per week
+    kept = []
+    for s in scores:
+        ext = s.vcp.pivot_extension_pct
+        if ext is not None and ext > max_extension_pct:
+            continue
+        if s.vcp.base_length_days < min_base_days:
+            continue
+        kept.append(s)
+    return kept
 
 
 def format_table(scores: List[VCPScore]) -> str:
@@ -148,9 +186,24 @@ def main(argv: List[str] | None = None) -> None:
         print("No results — check your tickers or network connectivity.", file=sys.stderr)
         sys.exit(1)
 
+    candidates = filter_setups(scores, args.max_extension, args.min_base_weeks)
+    print(
+        f"{len(candidates)} of {len(scores)} scanned tickers pass the setup filters "
+        f"(base >= {args.min_base_weeks:.0f}w, not more than {args.max_extension:.0f}% "
+        "past pivot).",
+        file=sys.stderr,
+    )
+    if not candidates:
+        print(
+            "No candidates passed the filters — try loosening --max-extension or "
+            "--min-base-weeks.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if args.output:
-        write_csv(scores, args.output)
-        print(f"Wrote {len(scores)} results to {args.output}", file=sys.stderr)
+        write_csv(candidates, args.output)
+        print(f"Wrote {len(candidates)} results to {args.output}", file=sys.stderr)
 
     print("Fetching Fear & Greed Index...", file=sys.stderr)
     fear_greed = fetch_fear_greed_index()
@@ -164,16 +217,23 @@ def main(argv: List[str] | None = None) -> None:
 
     if args.html_report:
         universe_label = "S&P 500 constituents" if args.sp500 else "scanned tickers"
+        filter_note = (
+            f"Showing setups with a base of at least {args.min_base_weeks:.0f} weeks "
+            f"that are within {args.max_extension:.0f}% of their pivot — stocks already "
+            "extended past breakout are excluded, not just down-weighted."
+        )
         write_html_report(
-            scores,
+            candidates,
             args.html_report,
             universe_size=len(tickers),
             universe_label=universe_label,
             fear_greed=fear_greed,
+            filter_note=filter_note,
+            total_scored=len(scores),
         )
         print(f"Wrote HTML report to {args.html_report}", file=sys.stderr)
 
-    filtered = [s for s in scores if s.score >= args.min_score]
+    filtered = [s for s in candidates if s.score >= args.min_score]
     if args.top:
         filtered = filtered[: args.top]
 
