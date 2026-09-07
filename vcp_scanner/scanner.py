@@ -109,12 +109,17 @@ def format_table(scores: List[VCPScore]) -> str:
     rows = []
     for s in scores:
         vol_flag = "yes" if (s.vcp.volume_dryup_score or 0) >= 60 else "no"
-        if s.vcp.pivot_extension_pct is None:
+        ext = s.vcp.pivot_extension_pct
+        if ext is None:
             ext_str = "-"
-        elif s.vcp.pivot_extension_pct <= 0:
-            ext_str = f"-{abs(s.vcp.pivot_extension_pct):.1f}% (below pivot)"
+        elif ext > 5:
+            ext_str = f"+{ext:.1f}% (extended)"
+        elif ext > 0:
+            ext_str = f"+{ext:.1f}%"
+        elif ext >= -5:
+            ext_str = f"{ext:.1f}%"
         else:
-            ext_str = f"+{s.vcp.pivot_extension_pct:.1f}% (extended)"
+            ext_str = f"{ext:.1f}% (in base)"
         rows.append(
             [
                 s.ticker,
