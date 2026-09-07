@@ -80,12 +80,32 @@ def _resample_weekly(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _find_base_sequence(window_df: pd.DataFrame, pct_threshold: float) -> List[SwingPoint]:
+    """Slice the swing sequence down to the base currently being built.
+
+    Anchoring at the *first* high in the lookback window is wrong: if a
+    stock completed an earlier base, broke out, and ran hard to a much
+    higher new high, that breakout leg would get counted as one of the
+    base's own "contractions" -- chaining an old, already-resolved base to
+    a fresh breakout rally as if it were one long, still-forming base. A
+    stock that just broke out and kept climbing to new highs isn't
+    currently basing, however shallow its one pullback looks.
+
+    Instead, anchor at the highest *confirmed* peak (excluding the trailing
+    swing, which is always just the still-forming current extreme -- see
+    find_swing_points) so only genuine structure since that peak counts.
+    """
     weekly = _resample_weekly(window_df)
     swings = find_swing_points(weekly, pct_threshold=pct_threshold)
-    first_high = next((i for i, p in enumerate(swings) if p.kind == "high"), None)
-    if first_high is None:
+    if not swings:
         return []
-    return swings[first_high:]
+
+    confirmed = swings[:-1] if len(swings) > 1 else swings
+    confirmed_high_idx = [i for i, p in enumerate(confirmed) if p.kind == "high"]
+    if not confirmed_high_idx:
+        return []
+
+    peak_idx = max(confirmed_high_idx, key=lambda i: swings[i].price)
+    return swings[peak_idx:]
 
 
 def analyze_contractions(seq: List[SwingPoint]) -> tuple[List[float], float, List[tuple]]:

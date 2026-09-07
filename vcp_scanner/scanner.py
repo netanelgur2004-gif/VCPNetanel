@@ -49,6 +49,14 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="Require the detected base to have been forming for at least this many "
         "weeks of trading (default 4.0, i.e. about a month; 0 to disable)",
     )
+    parser.add_argument(
+        "--min-contractions",
+        type=int,
+        default=2,
+        help="Require at least this many detected pullback legs in the current base "
+        "(default 2) -- excludes stocks that just made a fresh high, dipped once, "
+        "and are climbing again, which is normal uptrend noise, not a base; 0 to disable",
+    )
     return parser.parse_args(argv)
 
 
@@ -83,7 +91,10 @@ def run_scan(tickers: List[str], period: str, workers: int) -> List[VCPScore]:
 
 
 def filter_setups(
-    scores: List[VCPScore], max_extension_pct: float, min_base_weeks: float
+    scores: List[VCPScore],
+    max_extension_pct: float,
+    min_base_weeks: float,
+    min_contractions: int = 2,
 ) -> List[VCPScore]:
     """Keep only stocks with an actual, sufficiently-developed base that
     hasn't already run away from the pivot.
@@ -92,6 +103,11 @@ def filter_setups(
     can still score well overall on trend strength alone, which isn't a
     useful answer to "give me VCP setups" -- those need to be actionable
     near the pivot, not stocks that already broke out weeks ago.
+
+    `min_contractions` guards against a stock that just made a fresh high,
+    dipped once, and is climbing again -- one shallow pullback is normal
+    uptrend noise, not a "volatility contraction pattern". A real VCP needs
+    multiple successively-tighter pullbacks under the same ceiling.
     """
     min_base_days = min_base_weeks * 5.0  # ~5 trading days per week
     kept = []
@@ -100,6 +116,8 @@ def filter_setups(
         if ext is not None and ext > max_extension_pct:
             continue
         if s.vcp.base_length_days < min_base_days:
+            continue
+        if s.vcp.num_contractions < min_contractions:
             continue
         kept.append(s)
     return kept
@@ -191,17 +209,19 @@ def main(argv: List[str] | None = None) -> None:
         print("No results — check your tickers or network connectivity.", file=sys.stderr)
         sys.exit(1)
 
-    candidates = filter_setups(scores, args.max_extension, args.min_base_weeks)
+    candidates = filter_setups(
+        scores, args.max_extension, args.min_base_weeks, args.min_contractions
+    )
     print(
         f"{len(candidates)} of {len(scores)} scanned tickers pass the setup filters "
-        f"(base >= {args.min_base_weeks:.0f}w, not more than {args.max_extension:.0f}% "
-        "past pivot).",
+        f"(base >= {args.min_base_weeks:.0f}w with >= {args.min_contractions} pullback "
+        f"legs, not more than {args.max_extension:.0f}% past pivot).",
         file=sys.stderr,
     )
     if not candidates:
         print(
-            "No candidates passed the filters — try loosening --max-extension or "
-            "--min-base-weeks.",
+            "No candidates passed the filters — try loosening --max-extension, "
+            "--min-base-weeks, or --min-contractions.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -224,8 +244,10 @@ def main(argv: List[str] | None = None) -> None:
         universe_label = "S&P 500 constituents" if args.sp500 else "scanned tickers"
         filter_note = (
             f"Showing setups with a base of at least {args.min_base_weeks:.0f} weeks "
-            f"that are within {args.max_extension:.0f}% of their pivot — stocks already "
-            "extended past breakout are excluded, not just down-weighted."
+            f"and at least {args.min_contractions} pullback legs, within "
+            f"{args.max_extension:.0f}% of their pivot — stocks already extended past "
+            "breakout, or that only dipped once before pushing to new highs, are "
+            "excluded, not just down-weighted."
         )
         write_html_report(
             candidates,

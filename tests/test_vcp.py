@@ -164,8 +164,14 @@ def test_fear_greed_index_degrades_gracefully_on_network_failure(monkeypatch):
     assert fetch_fear_greed_index() is None
 
 
-def _fake_score(ticker: str, pivot_extension_pct, base_length_days: int) -> VCPScore:
-    vcp = VCPAnalysis(pivot_extension_pct=pivot_extension_pct, base_length_days=base_length_days)
+def _fake_score(
+    ticker: str, pivot_extension_pct, base_length_days: int, num_contractions: int = 2
+) -> VCPScore:
+    vcp = VCPAnalysis(
+        pivot_extension_pct=pivot_extension_pct,
+        base_length_days=base_length_days,
+        num_contractions=num_contractions,
+    )
     return VCPScore(
         ticker=ticker,
         score=50.0,
@@ -182,10 +188,21 @@ def test_filter_setups_excludes_extended_and_short_bases():
         _fake_score("NEAR", pivot_extension_pct=1.0, base_length_days=30),
         _fake_score("EXTENDED", pivot_extension_pct=12.0, base_length_days=30),
         _fake_score("SHORTBASE", pivot_extension_pct=1.0, base_length_days=10),
-        _fake_score("NOBASE", pivot_extension_pct=None, base_length_days=0),
+        _fake_score("NOBASE", pivot_extension_pct=None, base_length_days=0, num_contractions=0),
     ]
-    kept = filter_setups(scores, max_extension_pct=5.0, min_base_weeks=4.0)
+    kept = filter_setups(scores, max_extension_pct=5.0, min_base_weeks=4.0, min_contractions=2)
     assert [s.ticker for s in kept] == ["NEAR"]
+
+
+def test_filter_setups_excludes_single_dip_near_new_highs():
+    # Exactly the EXPD case: made a fresh high, dipped once, climbing again --
+    # that's normal uptrend noise, not a multi-leg VCP base.
+    scores = [
+        _fake_score("ONEDIP", pivot_extension_pct=2.9, base_length_days=50, num_contractions=1),
+        _fake_score("REALBASE", pivot_extension_pct=2.9, base_length_days=50, num_contractions=3),
+    ]
+    kept = filter_setups(scores, max_extension_pct=5.0, min_base_weeks=4.0, min_contractions=2)
+    assert [s.ticker for s in kept] == ["REALBASE"]
 
 
 if __name__ == "__main__":
