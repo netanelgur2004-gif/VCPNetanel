@@ -70,7 +70,7 @@ def print_summary(result: DoubleSweepResult) -> None:
         )
 
 
-def plot(ticker: str, df, result: DoubleSweepResult, out_path: Path, plot_bars: int = 160) -> None:
+def plot(ticker: str, df, result: DoubleSweepResult, out_path: Path, plot_bars: int = 260) -> None:
     window = df.tail(plot_bars)
     offset = len(df) - len(window)
 
@@ -133,7 +133,8 @@ def plot(ticker: str, df, result: DoubleSweepResult, out_path: Path, plot_bars: 
     status = "MATCHED" if result.matched else f"no match ({result.reason})"
     score_str = f"  score={result.score:.1f}" if result.matched else ""
     ax.set_title(f"{ticker} — Double-Sweep Base: {status}{score_str}")
-    ax.legend(loc="upper left", fontsize=8)
+    if ax.get_legend_handles_labels()[0]:
+        ax.legend(loc="upper left", fontsize=8)
     ax.set_ylabel("Price")
     vol_ax.set_ylabel("Volume")
 
@@ -153,7 +154,14 @@ def plot(ticker: str, df, result: DoubleSweepResult, out_path: Path, plot_bars: 
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Plot Double-Sweep Base detections for one or more tickers.")
     parser.add_argument("tickers", nargs="+", help="Ticker symbol(s), e.g. CLSK WULF FRO FANG")
-    parser.add_argument("--period", default="1y", help="History period to fetch (default: 1y)")
+    parser.add_argument(
+        "--period",
+        default="2y",
+        help="History period to fetch (default: 2y -- fetch_history requires >=260 rows "
+        "for the trend-template's 200-day MA, which a bare 1y period doesn't clear; the "
+        "chart itself still only shows the most recent ~year, via --plot-bars)",
+    )
+    parser.add_argument("--plot-bars", type=int, default=260, help="How many recent bars to draw (default: 260, ~1 trading year)")
     parser.add_argument("--out-dir", default=".", help="Directory to save PNGs into (default: cwd)")
     parser.add_argument("--fractal-n", type=int, default=4)
     parser.add_argument("--lookback-bars", type=int, default=60)
@@ -163,6 +171,16 @@ def main(argv=None) -> None:
     parser.add_argument("--max-sweep-pct", type=float, default=3.0)
     parser.add_argument("--max-reclaim-bars", type=int, default=3)
     parser.add_argument("--max-final-contraction-pct", type=float, default=8.0)
+    parser.add_argument(
+        "--min-trend-checks",
+        type=int,
+        default=None,
+        help="Minimum trend-template checks required to proceed to sweep detection "
+        "(default: all available, i.e. the real production gate). Pass 0 to bypass "
+        "the gate entirely and see the sweep/contraction geometry regardless of "
+        "trend -- useful for visually checking the pattern on a ticker that fails "
+        "the Stage-2 trend check, without that affecting the real scanner.",
+    )
     args = parser.parse_args(argv)
 
     cfg = DoubleSweepConfig(
@@ -174,6 +192,7 @@ def main(argv=None) -> None:
         max_sweep_pct=args.max_sweep_pct,
         max_reclaim_bars=args.max_reclaim_bars,
         max_final_contraction_pct=args.max_final_contraction_pct,
+        min_trend_template_checks=args.min_trend_checks,
     )
 
     out_dir = Path(args.out_dir)
@@ -184,7 +203,7 @@ def main(argv=None) -> None:
             continue
         result = analyze_double_sweep(ticker, df, cfg)
         print_summary(result)
-        plot(ticker, df, result, out_dir / f"{ticker}_double_sweep.png")
+        plot(ticker, df, result, out_dir / f"{ticker}_double_sweep.png", plot_bars=args.plot_bars)
 
 
 if __name__ == "__main__":
