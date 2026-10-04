@@ -9,7 +9,7 @@ from vcp_scanner.scanner import filter_setups
 from vcp_scanner.scorer import VCPScore, score_ticker, suggest_stop_loss
 from vcp_scanner.swings import find_swing_points
 from vcp_scanner.trend_template import TrendTemplateResult, evaluate_trend_template
-from vcp_scanner.vcp import VCPAnalysis
+from vcp_scanner.vcp import VCPAnalysis, analyze_vcp
 
 
 def _make_df(closes: list[float], volumes: list[float], start="2023-01-02") -> pd.DataFrame:
@@ -203,6 +203,45 @@ def test_filter_setups_excludes_single_dip_near_new_highs():
     ]
     kept = filter_setups(scores, max_extension_pct=5.0, min_base_weeks=4.0, min_contractions=2)
     assert [s.ticker for s in kept] == ["REALBASE"]
+
+
+def test_pivot_ignores_stale_high_from_before_a_lower_rebase():
+    # The MU case: a sharp high, a hard breakdown, then months spent basing
+    # well below that old high without ever threatening it again. The old
+    # high is stale -- the pivot should reflect the ceiling the stock is
+    # actually testing now, not a distant, unapproached peak.
+    rng = np.random.default_rng(11)
+
+    uptrend = list(np.linspace(20, 150, 150) + rng.normal(0, 0.3, 150))
+    breakdown = list(np.linspace(150, 95, 12) + rng.normal(0, 0.3, 12))
+
+    def leg(start, pct_down, n_down, recover_frac):
+        low = start * (1 - pct_down / 100)
+        down = list(np.linspace(start, low, n_down) + rng.normal(0, 0.2, n_down))
+        recover_to = start * (1 - (pct_down / 100) * (1 - recover_frac))
+        up = list(np.linspace(low, recover_to, max(n_down // 2, 3)) + rng.normal(0, 0.2, max(n_down // 2, 3)))
+        return down + up, recover_to
+
+    cur = 108.0
+    rebase = []
+    for pct, n in zip([18, 15, 13, 11], [14, 12, 10, 8]):
+        seg, cur = leg(cur, pct, n, 0.95)
+        rebase.extend(seg)
+
+    prices = uptrend + breakdown + rebase
+    vols = list(np.linspace(2_000_000, 1_000_000, len(prices)) + rng.normal(0, 20_000, len(prices)))
+    vols = [max(float(v), 1000.0) for v in vols]
+
+    df = _make_df(prices, vols)
+    vcp = analyze_vcp(df)
+
+    assert vcp.pivot_price is not None
+    assert vcp.pivot_price < 115, f"pivot should track the recent ~108 ceiling, not the old 150 high (got {vcp.pivot_price})"
+    assert vcp.pivot_extension_pct is not None
+    assert abs(vcp.pivot_extension_pct) < 15, (
+        f"extension should be small -- price is near the real recent ceiling, "
+        f"not ~35% below a stale old high (got {vcp.pivot_extension_pct})"
+    )
 
 
 if __name__ == "__main__":

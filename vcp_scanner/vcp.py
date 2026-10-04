@@ -79,7 +79,9 @@ def _resample_weekly(df: pd.DataFrame) -> pd.DataFrame:
     return weekly.dropna(subset=["Close"])
 
 
-def _find_base_sequence(window_df: pd.DataFrame, pct_threshold: float) -> List[SwingPoint]:
+def _find_base_sequence(
+    window_df: pd.DataFrame, pct_threshold: float, ceiling_tolerance_pct: float = 12.0
+) -> List[SwingPoint]:
     """Slice the swing sequence down to the base currently being built.
 
     Anchoring at the *first* high in the lookback window is wrong: if a
@@ -90,9 +92,18 @@ def _find_base_sequence(window_df: pd.DataFrame, pct_threshold: float) -> List[S
     stock that just broke out and kept climbing to new highs isn't
     currently basing, however shallow its one pullback looks.
 
-    Instead, anchor at the highest *confirmed* peak (excluding the trailing
-    swing, which is always just the still-forming current extreme -- see
-    find_swing_points) so only genuine structure since that peak counts.
+    Anchoring at the single highest confirmed peak isn't enough either: a
+    stock can make a high, break down hard, and spend months re-basing well
+    below it without ever threatening that old high again (seen on MU --
+    peaked near 1255, then based around 1000-1100 for three months; the
+    1255 high is stale, not the ceiling of the base actually forming now).
+    A real VCP base is a consolidation *under one ceiling* -- its highs
+    should sit close to each other, not scattered across a wide range.
+
+    So: anchor at the highest confirmed peak, then walk backward through
+    the confirmed highs only as far as they stay within
+    `ceiling_tolerance_pct` of the running peak, keeping the longest recent
+    run of highs that all sit near the same resistance level.
     """
     weekly = _resample_weekly(window_df)
     swings = find_swing_points(weekly, pct_threshold=pct_threshold)
@@ -104,7 +115,20 @@ def _find_base_sequence(window_df: pd.DataFrame, pct_threshold: float) -> List[S
     if not confirmed_high_idx:
         return []
 
-    peak_idx = max(confirmed_high_idx, key=lambda i: swings[i].price)
+    end = len(confirmed_high_idx) - 1
+    accepted_start = end
+    running_max = confirmed[confirmed_high_idx[end]].price
+    for j in range(end - 1, -1, -1):
+        candidate_max = max(running_max, confirmed[confirmed_high_idx[j]].price)
+        threshold = candidate_max * (1 - ceiling_tolerance_pct / 100.0)
+        suffix_prices = [confirmed[confirmed_high_idx[k]].price for k in range(j, end + 1)]
+        if all(p >= threshold for p in suffix_prices):
+            running_max = candidate_max
+            accepted_start = j
+        else:
+            break
+
+    peak_idx = confirmed_high_idx[accepted_start]
     return swings[peak_idx:]
 
 
