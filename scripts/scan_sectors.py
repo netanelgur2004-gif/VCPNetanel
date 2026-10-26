@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from vcp_scanner.sector_chart import plot_sector  # noqa: E402
 from vcp_scanner.sector_data import DEFAULT_CACHE_DIR, fetch_sector_history  # noqa: E402
+from vcp_scanner.sector_report import write_html_report  # noqa: E402
 from vcp_scanner.sector_scan import SectorResult, scan_sectors, tag_stocks_with_sector  # noqa: E402
 from vcp_scanner.sector_universe import BENCHMARK  # noqa: E402
 from vcp_scanner.universe import sp500_tickers, tickers_from_csv_arg  # noqa: E402
@@ -50,6 +51,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="How many of the top-ranked sectors to chart (default: same as --top)",
     )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Where to save the CSV + charts")
+    parser.add_argument("--html-report", help="Also write a self-contained HTML dashboard to this path")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Local bar cache directory")
     parser.add_argument("--no-cache", action="store_true", help="Bypass the local CSV cache")
 
@@ -122,6 +124,10 @@ def main(argv: List[str] | None = None) -> None:
     csv_path = out_dir / "sector_rankings.csv"
     write_csv(all_results, csv_path)
     print(f"Wrote {len(all_results)} ranked sectors to {csv_path}", file=sys.stderr)
+
+    if args.html_report:
+        write_html_report(all_results, args.html_report)
+        print(f"Wrote HTML report to {args.html_report}", file=sys.stderr)
 
     chart_targets = top_results[:charts_top] if not args.test else top_results
     benchmark_df = fetch_sector_history(BENCHMARK, period=args.period, cache_dir=args.cache_dir, use_cache=not args.no_cache)
