@@ -10,7 +10,7 @@ Looks at the most recent price base for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -43,6 +43,8 @@ class VCPAnalysis:
     contractions_pct: List[float] = field(default_factory=list)
     num_contractions: int = 0
     contraction_score: float = 0.0
+    # (high_date, high_price, low_date, low_price) per confirmed leg, chronological.
+    contraction_legs: List[Tuple[pd.Timestamp, float, pd.Timestamp, float]] = field(default_factory=list)
 
     volume_dryup_ratio: Optional[float] = None
     recent_volume_ratio: Optional[float] = None
@@ -134,12 +136,12 @@ def _find_base_sequence(
 
 def analyze_contractions(seq: List[SwingPoint]) -> tuple[List[float], float, List[tuple]]:
     down_legs: List[float] = []
-    leg_prices: List[tuple] = []  # (high_price, low_price) per confirmed contraction, chronological
+    leg_prices: List[tuple] = []  # (high_date, high_price, low_date, low_price) per confirmed leg
     for i in range(0, len(seq) - 1, 2):
         hi, lo = seq[i], seq[i + 1]
         if hi.kind == "high" and lo.kind == "low" and hi.price > 0:
             down_legs.append((hi.price - lo.price) / hi.price * 100.0)
-            leg_prices.append((hi.price, lo.price))
+            leg_prices.append((hi.date, hi.price, lo.date, lo.price))
 
     if not down_legs:
         return [], 0.0, []
@@ -254,7 +256,8 @@ def analyze_vcp(df: pd.DataFrame, pct_threshold: float = 8.0, base_lookback: int
     result.contractions_pct = [round(x, 2) for x in down_legs]
     result.num_contractions = len(down_legs)
     result.contraction_score = contraction_score
-    result.last_contraction_low = leg_prices[-1][1] if leg_prices else None
+    result.contraction_legs = leg_prices
+    result.last_contraction_low = leg_prices[-1][3] if leg_prices else None
 
     base_start = seq[0]
     daily_pos = int(window_df.index.searchsorted(base_start.date))

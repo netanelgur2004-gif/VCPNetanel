@@ -7,3 +7,5 @@ venv/
 results.csv
 *.csv
 !tests/**/*.csv
+data_cache/
+output/

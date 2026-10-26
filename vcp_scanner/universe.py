@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 import pandas as pd
 import requests
@@ -40,3 +40,20 @@ def sp500_tickers() -> List[str]:
     except Exception:
         pass
     return list(FALLBACK_SP500_SAMPLE)
+
+
+def sp500_sector_map() -> Dict[str, str]:
+    """{ticker: GICS Sector name}, from the same Wikipedia table sp500_tickers()
+    pulls (it also has a "GICS Sector" column). Empty dict if the fetch fails
+    -- callers should treat a missing ticker as "sector unknown", not an error.
+    """
+    try:
+        resp = requests.get(SP500_WIKI_URL, headers=_HEADERS, timeout=15)
+        resp.raise_for_status()
+        tables = pd.read_html(io.StringIO(resp.text))
+        df = tables[0]
+        tickers = df["Symbol"].astype(str).str.replace(".", "-", regex=False)
+        sectors = df["GICS Sector"].astype(str)
+        return dict(zip(tickers, sectors))
+    except Exception:
+        return {}
